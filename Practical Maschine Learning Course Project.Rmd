@@ -1,0 +1,113 @@
+---
+title: "Practical Maschine Learning Course Project"
+author: "Robert Moldenhauer"
+date: "2022-12-02"
+output: html_document
+---
+# Practical Maschine Learning Course Project
+
+## Background
+
+"Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset)."
+
+## Setup
+
+First off all R Studio is set up and data is downloaded.
+
+```{r Setup}
+## Setup and Downloading data  
+
+library(caret)
+library(tidyverse)
+library(rpart)
+library(randomForest)
+
+#set seed for reproduce ability
+set.seed(12345)
+
+trainingurl <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+
+testurl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+
+download.file(trainingurl, "pml-training.csv")
+download.file(testurl, "pml-testing.csv")
+
+train <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+test <- read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
+
+```
+
+## Cleaning of Data
+
+Desciptive Columns (1:7) wer removed and all columns with a near zero varaince including NA columns.
+
+```{r Cleaning Data}
+## Cleaning data
+
+#Remove explanatory data, which are no predictors (first 7 columns)
+train   <-train[,-c(1:7)]
+test <-test[,-c(1:7)]
+
+#Remove variables with zero variance
+train<-train[,colSums(is.na(train)) == 0]
+test <-test[,colSums(is.na(test)) == 0]
+
+```
+
+## Cross Validation
+
+For Cross Validation tthe training data is split into two portions of 75% for Training and Rest to Cross Validate.
+
+
+```{r Cross Validation}
+## Cross validation
+
+# Split the training data in training (75%) and validate (25%) data) subsets to get out-of-sample errors:
+inTrain <- createDataPartition(y=train$classe, p=0.75, list=FALSE)    
+Training <- train[inTrain, ]
+validate <- train[-inTrain, ] 
+
+```
+
+## Decision Tree
+
+First model applied is a Decision tree. 
+
+```{r Decission Tree}
+##DECISION TREE
+#Fit model on Training data
+fitDT <- rpart(classe ~ ., data=Training, method="class")
+
+#Use model to predict class in validation set
+prediction.validation.DT <- predict(fitDT, validate, type = "class")
+
+
+conf.matrix.dt <- confusionMatrix(table(prediction.validation.DT, validate$classe))
+print(conf.matrix.dt)
+```
+
+## Random Forest
+
+Second model applied is a random Forest.
+
+```{r Random Forest}
+## Random Forest
+# We grow a random forest
+fitRF  <- train(classe ~., data = Training, method = "rf", trControl = trainControl(method="cv",number=3))
+
+
+# Now get the prediction in the validation portion and see how well we do
+prediction.validation.rf <- predict(fitRF, validate, na.action = na.pass)
+conf.matrix.rf <- confusionMatrix(table(prediction.validation.rf,validate$classe))
+print(conf.matrix.rf)
+```
+
+## Performance
+
+As performance of random tree is superior towards decision tree, this model will be used for Prediction on Test data set.
+
+```{r Predictiting on Test}
+## Using RF on Testset
+prediction.testing.rf <- predict(fitRF,test)
+print(prediction.testing.rf)
+```
